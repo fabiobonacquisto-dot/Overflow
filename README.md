@@ -1,13 +1,14 @@
-# Overflow — Ledger Core
+# Overflow — Ledger Core + The Gauntlet
 
-SWC's Elite Coaching Growth Platform. This is Phase 1 of the build: the **Ledger Core** — the single source of truth every later module (The Gauntlet, Referral Flywheel, Coach Prep Briefs, Proof Engine, Founder's Circle) reads from and writes back to.
+SWC's Elite Coaching Growth Platform. The **Ledger Core** (Phase 1) is the single source of truth every module reads from and writes back to. **The Gauntlet** (Phase 2, Module 1) is the first module built on top of it: a trip-based competition scored from the same Activity data.
 
-Ships in this phase:
+Ships so far:
 
 - Client list + detail pages
 - Manual activity logging (calls, prospecting, closes, referrals, etc.)
 - Win logging, with an ad-ready flag for the future Proof Engine
 - A rule-based Producer Score engine (Time Management / Prospecting / Closing / Accountability), computed per client per month
+- **The Gauntlet**: a live leaderboard by weekly/monthly/quarterly period, a tiered rewards config (Bronze/Silver/Gold/Trip Winner — not winner-take-all), and a `tripEarned` flag once a client crosses the trip threshold
 - 9 mock Elite/Founder's Circle clients with realistic seed data so the app is demoable immediately
 
 No HubSpot integration yet — that's Phase 5, behind a `MOCK_HUBSPOT` flag, once a Private App token and custom contact properties are confirmed.
@@ -55,6 +56,14 @@ See `prisma/schema.prisma`. The full Ledger schema from the master brief (Client
 `lib/scoring.ts` is the pure scoring function (no I/O): it takes a client's activities for a period and returns a composite Producer Score plus a per-category breakdown. `lib/scoring-service.ts` wraps it with the Prisma calls that pull a client's activities for a period and persist the result to the `Score` table.
 
 Category targets/weights are placeholders (`CATEGORY_TARGETS` in `lib/scoring.ts`) until real top-producer benchmarks are available — swap the numbers there once that data lands, no schema or call-site changes needed.
+
+## The Gauntlet
+
+`/gauntlet` — a live leaderboard with tabs for weekly, monthly, and quarterly periods (`lib/periods.ts` handles the three period-key/bounds calculations; it's separate from `lib/scoring.ts`'s month-only helpers since Producer Score never needed the other granularities).
+
+Points are a different formula from Producer Score on purpose: `lib/gauntlet.ts`'s `POINTS_BY_ACTIVITY_TYPE` weights activities by competitive impact (a close is worth far more than a single prospecting touch) rather than balancing across categories, so the two systems can rank clients differently — that's expected, not a bug. `lib/gauntlet-service.ts` computes every active client's points for a period, ranks them, and upserts `GauntletEntry` rows (recomputed on every page load — cheap at this client count).
+
+`REWARD_TIERS` in `lib/gauntlet.ts` defines the tiered rewards (Bronze/Silver/Gold/Trip Winner) — thresholds are placeholders calibrated against seeded mock volume, pending the real leadership decision on the first trip threshold/reward (Master Brief Part 9). `tripEarned` is set once a client's points cross the top tier's threshold.
 
 ## Useful scripts
 

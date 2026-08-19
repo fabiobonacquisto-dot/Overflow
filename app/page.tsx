@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { formatPeriodLabel, periodKey } from "@/lib/scoring";
+import { periodKeyFor } from "@/lib/periods";
+import { recomputeGauntletForPeriod } from "@/lib/gauntlet-service";
 import { TierBadge } from "@/components/Badge";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +20,10 @@ const ACTIVITY_TYPE_LABELS: Record<string, string> = {
 
 export default async function DashboardPage() {
   const currentPeriod = periodKey(new Date());
+  const gauntletPeriod = periodKeyFor(new Date(), "monthly");
+  await recomputeGauntletForPeriod(gauntletPeriod, "monthly");
 
-  const [clients, scores, recentActivities, adReadyWinCount] = await Promise.all([
+  const [clients, scores, recentActivities, adReadyWinCount, gauntletLeader] = await Promise.all([
     prisma.client.count({ where: { status: "ACTIVE" } }),
     prisma.score.findMany({ where: { period: currentPeriod } }),
     prisma.activity.findMany({
@@ -28,6 +32,10 @@ export default async function DashboardPage() {
       include: { client: true },
     }),
     prisma.win.count({ where: { isAdReady: true } }),
+    prisma.gauntletEntry.findFirst({
+      where: { period: gauntletPeriod, tierRank: 1 },
+      include: { client: true },
+    }),
   ]);
 
   const avgScore = scores.length
@@ -49,10 +57,17 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Ledger Dashboard</h1>
       <p className="text-sm text-slate-500 mb-8">{formatPeriodLabel(currentPeriod)}</p>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         <StatCard label="Active Elite Clients" value={clients} />
         <StatCard label="Avg Producer Score" value={avgScore} />
         <StatCard label="Ad-Ready Wins" value={adReadyWinCount} />
+        <Link href="/gauntlet" className="rounded-lg border border-slate-200 bg-white p-6 hover:border-slate-300">
+          <p className="text-sm text-slate-500">Gauntlet Leader</p>
+          <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900 truncate">
+            {gauntletLeader?.client.name ?? "—"}
+          </p>
+          {gauntletLeader && <p className="text-xs text-slate-400 mt-1">{gauntletLeader.points} pts this month</p>}
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

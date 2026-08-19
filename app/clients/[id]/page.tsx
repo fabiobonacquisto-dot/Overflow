@@ -9,6 +9,8 @@ import {
   previousPeriod,
   type CategoryBreakdown,
 } from "@/lib/scoring";
+import { periodKeyFor } from "@/lib/periods";
+import { rewardTierFor } from "@/lib/gauntlet";
 import { TierBadge, StatusBadge } from "@/components/Badge";
 import { ScoreBar, ProducerScoreDial } from "@/components/ScoreBar";
 import {
@@ -48,10 +50,16 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
   const currentPeriod = periodKey(new Date());
   const priorPeriod = previousPeriod(currentPeriod);
 
-  const [currentScore, priorScore] = await Promise.all([
+  const gauntletPeriod = periodKeyFor(new Date(), "monthly");
+
+  const [currentScore, priorScore, gauntletEntry] = await Promise.all([
     prisma.score.findUnique({ where: { clientId_period: { clientId: client.id, period: currentPeriod } } }),
     prisma.score.findUnique({ where: { clientId_period: { clientId: client.id, period: priorPeriod } } }),
+    prisma.gauntletEntry.findUnique({
+      where: { clientId_period: { clientId: client.id, period: gauntletPeriod } },
+    }),
   ]);
+  const gauntletTier = gauntletEntry ? rewardTierFor(gauntletEntry.points) : null;
 
   const breakdown = (currentScore?.categoryBreakdown ?? null) as CategoryBreakdown | null;
   const trend =
@@ -74,6 +82,21 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
               Coach: {client.coach?.name ?? "Unassigned"}
             </span>
           </div>
+          <p className="mt-2 text-sm text-slate-500">
+            <Link href="/gauntlet" className="hover:underline">
+              Gauntlet
+            </Link>
+            :{" "}
+            {gauntletEntry ? (
+              <>
+                #{gauntletEntry.tierRank} · {gauntletEntry.points} pts
+                {gauntletTier && <span className="text-slate-400"> · {gauntletTier.name}</span>}
+                {gauntletEntry.tripEarned && <span className="text-indigo-600"> · ✈ Trip Earned</span>}
+              </>
+            ) : (
+              <span className="text-slate-400">not yet computed for this period</span>
+            )}
+          </p>
         </div>
         <form action={recomputeScoreAction.bind(null, client.id)}>
           <button

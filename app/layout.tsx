@@ -45,6 +45,9 @@ export default function RootLayout({
                 <Link href="/clients" className="hover:text-slate-900">
                   Clients
                 </Link>
+                <Link href="/gauntlet" className="hover:text-slate-900">
+                  The Gauntlet
+                </Link>
               </nav>
             </div>
           </header>
