@@ -76,6 +76,10 @@ prisma generate && prisma migrate deploy && tsx prisma/seed.ts && next build
 - `prisma migrate deploy` applies any pending migrations to whatever `DATABASE_URL` points at.
 - The seed step is **safe to run on every build**: it checks for existing clients first and only loads mock data if the Ledger is empty. Your first deploy seeds the 9 mock clients; every deploy after that (once you've added real clients) leaves the data alone.
 - To force a full reset back to mock data at any time, run `SEED_FORCE=true npm run build` (or just `npm run db:seed`, which sets that flag for you) against the target database.
+- `vercel.json` pins this same command as the project's Build Command, so it's used even if a different one is set in the dashboard.
+- Every page that queries the database (`/`, `/clients`, `/clients/[id]`, `/clients/new`) is marked `export const dynamic = "force-dynamic"`, so Next.js never tries to query the database while statically generating pages at build time — only real requests do, after migrate+seed have already run.
+
+If a build still fails with a "relation/table does not exist" error: open Vercel → Project Settings → Build & Development Settings and check whether **Build Command** has a manual override saved (some imports pre-fill and lock this to plain `next build`). Either clear the override or set it explicitly to the command above, then confirm `DATABASE_URL` is set for the environment (Production/Preview) that build is running under.
 
 ### One-time setup
 

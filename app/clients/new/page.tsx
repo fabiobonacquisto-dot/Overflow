@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/app/clients/actions";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewClientPage() {
   const coaches = await prisma.coach.findMany({ orderBy: { name: "asc" } });
 
