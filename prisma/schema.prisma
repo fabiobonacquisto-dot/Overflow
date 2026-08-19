@@ -1,0 +1,160 @@
+// Overflow — Ledger Core data model (Master Brief Part 4)
+// Full schema is defined up front so later modules (Gauntlet, Referral Flywheel,
+// Coach Prep, Proof Engine, Founder's Circle) can read/write the same tables
+// without further migrations. Only Ledger Core has UI/logic in this phase.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ClientTier {
+  ELITE
+  FOUNDERS
+}
+
+enum ClientStatus {
+  ACTIVE
+  PAUSED
+  CHURNED
+}
+
+enum ActivityType {
+  CALL
+  PROSPECTING
+  CLOSE
+  REFERRAL_SENT
+  FOLLOW_UP
+  CHECK_IN
+  PLANNING
+  TRAINING
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+model Coach {
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @unique
+  clientCapacity     Int      @default(15)
+  currentClientCount Int      @default(0)
+  createdAt          DateTime @default(now())
+
+  clients Client[]
+
+  @@map("coaches")
+}
+
+model Client {
+  id       String       @id @default(cuid())
+  name     String
+  email    String       @unique
+  coachId  String?
+  tier     ClientTier   @default(ELITE)
+  status   ClientStatus @default(ACTIVE)
+  joinedAt DateTime     @default(now())
+
+  coach                 Coach?                 @relation(fields: [coachId], references: [id])
+  activities            Activity[]
+  wins                  Win[]
+  scores                Score[]
+  referralLink          ReferralLink?
+  gauntletEntries       GauntletEntry[]
+  foundersCircleInvites FoundersCircleInvite[]
+
+  @@map("clients")
+}
+
+model Activity {
+  id         String       @id @default(cuid())
+  clientId   String
+  type       ActivityType
+  value      Float        @default(1)
+  notes      String?
+  occurredAt DateTime     @default(now())
+  createdAt  DateTime     @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("activities")
+  @@index([clientId, occurredAt])
+}
+
+model Win {
+  id             String   @id @default(cuid())
+  clientId       String
+  description    String
+  metricImproved String
+  percentGain    Float
+  occurredAt     DateTime @default(now())
+  isAdReady      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("wins")
+  @@index([clientId, occurredAt])
+}
+
+model Score {
+  id                 String   @id @default(cuid())
+  clientId           String
+  period             String
+  producerScore      Float
+  categoryBreakdown  Json
+  computedAt         DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("scores")
+  @@unique([clientId, period])
+}
+
+model ReferralLink {
+  id             String   @id @default(cuid())
+  clientId       String   @unique
+  slug           String   @unique
+  clicks         Int      @default(0)
+  conversions    Int      @default(0)
+  rewardCredited Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("referral_links")
+}
+
+model GauntletEntry {
+  id         String   @id @default(cuid())
+  clientId   String
+  period     String
+  points     Int      @default(0)
+  tierRank   Int?
+  tripEarned Boolean  @default(false)
+  updatedAt  DateTime @updatedAt
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("gauntlet_entries")
+  @@unique([clientId, period])
+}
+
+model FoundersCircleInvite {
+  id         String       @id @default(cuid())
+  clientId   String
+  invitedAt  DateTime     @default(now())
+  status     InviteStatus @default(PENDING)
+  respondedAt DateTime?
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("founders_circle_invites")
+}
