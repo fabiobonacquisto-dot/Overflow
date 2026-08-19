@@ -68,6 +68,15 @@ function randomDateWithinPeriod(period: string): Date {
 }
 
 async function main() {
+  const existingClientCount = await prisma.client.count();
+  if (existingClientCount > 0 && process.env.SEED_FORCE !== "true") {
+    console.log(
+      `Ledger already has ${existingClientCount} client(s) — skipping seed. ` +
+        "Run with SEED_FORCE=true to reset and reseed mock data (this deletes existing data)."
+    );
+    return;
+  }
+
   console.log("Clearing existing Ledger data...");
   await prisma.score.deleteMany();
   await prisma.gauntletEntry.deleteMany();

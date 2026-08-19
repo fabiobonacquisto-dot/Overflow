@@ -65,11 +65,32 @@ npm run lint
 npm run build
 ```
 
-## Deploying
+## Deploying to Vercel
+
+Migrations and seeding run automatically as part of the build — no manual step needed on deploy. The `build` script is:
+
+```
+prisma generate && prisma migrate deploy && tsx prisma/seed.ts && next build
+```
+
+- `prisma migrate deploy` applies any pending migrations to whatever `DATABASE_URL` points at.
+- The seed step is **safe to run on every build**: it checks for existing clients first and only loads mock data if the Ledger is empty. Your first deploy seeds the 9 mock clients; every deploy after that (once you've added real clients) leaves the data alone.
+- To force a full reset back to mock data at any time, run `SEED_FORCE=true npm run build` (or just `npm run db:seed`, which sets that flag for you) against the target database.
+
+### One-time setup
+
+1. Push this repo to GitHub (already done if you're reading this from the repo).
+2. Go to [vercel.com/new](https://vercel.com/new) and import the repo. Vercel auto-detects Next.js — no config needed.
+3. Before the first deploy, add an environment variable: `DATABASE_URL` = your Neon connection string (Production, Preview, and Development environments).
+4. Deploy. Watch the build logs — you should see `Applying migration` and `Seeded 9 clients...` before the Next.js build starts.
+5. Every future `git push` to this branch redeploys automatically and re-runs the same safe build chain.
+
+Alternatively, from your own machine (with network access to Vercel):
 
 ```bash
 npm install -g vercel
-vercel
+vercel login
+vercel link      # connect this folder to the Vercel project
+vercel env add DATABASE_URL   # paste your Neon connection string when prompted
+vercel --prod
 ```
-
-Add `DATABASE_URL` as an environment variable in the Vercel project settings so the deployed app connects to the same database.
