@@ -30,7 +30,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50 text-slate-900`}
       >
         <div className="min-h-screen flex flex-col">
-          <header className="border-b border-slate-200 bg-white">
+          <header className="border-b border-slate-200 bg-white print:hidden">
             <div className="mx-auto max-w-6xl px-6 py-4 flex items-center justify-between">
               <Link href="/" className="flex items-center gap-2">
                 <span className="text-xl font-semibold tracking-tight">Overflow</span>
@@ -48,13 +48,19 @@ export default function RootLayout({
                 <Link href="/gauntlet" className="hover:text-slate-900">
                   The Gauntlet
                 </Link>
+                <Link href="/referrals" className="hover:text-slate-900">
+                  Referrals
+                </Link>
+                <Link href="/coaches" className="hover:text-slate-900">
+                  Coaches
+                </Link>
               </nav>
             </div>
           </header>
           <main className="flex-1">
             <div className="mx-auto max-w-6xl px-6 py-8">{children}</div>
           </main>
-          <footer className="border-t border-slate-200 py-4">
+          <footer className="border-t border-slate-200 py-4 print:hidden">
             <div className="mx-auto max-w-6xl px-6 text-xs text-slate-400">
               Overflow Ledger Core — Southwestern Consulting
             </div>

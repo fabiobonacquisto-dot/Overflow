@@ -11,6 +11,8 @@ import {
 } from "@/lib/scoring";
 import { periodKeyFor } from "@/lib/periods";
 import { rewardTierFor } from "@/lib/gauntlet";
+import { REFERRAL_ELIGIBILITY_SCORE_THRESHOLD } from "@/lib/referral";
+import { ACTIVITY_TYPE_LABELS } from "@/lib/activity";
 import { TierBadge, StatusBadge } from "@/components/Badge";
 import { ScoreBar, ProducerScoreDial } from "@/components/ScoreBar";
 import {
@@ -23,17 +25,6 @@ import {
 } from "@/app/clients/[id]/actions";
 
 export const dynamic = "force-dynamic";
-
-const ACTIVITY_TYPE_LABELS: Record<string, string> = {
-  CALL: "Coaching Call",
-  PROSPECTING: "Prospecting",
-  CLOSE: "Close",
-  REFERRAL_SENT: "Referral Sent",
-  FOLLOW_UP: "Follow-up",
-  CHECK_IN: "Check-in",
-  PLANNING: "Planning",
-  TRAINING: "Training",
-};
 
 export default async function ClientDetailPage({ params }: { params: { id: string } }) {
   const client = await prisma.client.findUnique({
@@ -52,12 +43,13 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
 
   const gauntletPeriod = periodKeyFor(new Date(), "monthly");
 
-  const [currentScore, priorScore, gauntletEntry] = await Promise.all([
+  const [currentScore, priorScore, gauntletEntry, referralLink] = await Promise.all([
     prisma.score.findUnique({ where: { clientId_period: { clientId: client.id, period: currentPeriod } } }),
     prisma.score.findUnique({ where: { clientId_period: { clientId: client.id, period: priorPeriod } } }),
     prisma.gauntletEntry.findUnique({
       where: { clientId_period: { clientId: client.id, period: gauntletPeriod } },
     }),
+    prisma.referralLink.findUnique({ where: { clientId: client.id } }),
   ]);
   const gauntletTier = gauntletEntry ? rewardTierFor(gauntletEntry.points) : null;
 
@@ -97,15 +89,39 @@ export default async function ClientDetailPage({ params }: { params: { id: strin
               <span className="text-slate-400">not yet computed for this period</span>
             )}
           </p>
+          <p className="text-sm text-slate-500">
+            <Link href="/referrals" className="hover:underline">
+              Referral
+            </Link>
+            :{" "}
+            {referralLink ? (
+              <>
+                <code className="text-xs text-slate-600">/r/{referralLink.slug}</code> · {referralLink.clicks} clicks ·{" "}
+                {referralLink.conversions} conversions
+              </>
+            ) : (
+              <span className="text-slate-400">
+                not yet eligible (Producer Score needs {REFERRAL_ELIGIBILITY_SCORE_THRESHOLD}+)
+              </span>
+            )}
+          </p>
         </div>
-        <form action={recomputeScoreAction.bind(null, client.id)}>
-          <button
-            type="submit"
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/clients/${client.id}/brief`}
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
-            Recompute Score
-          </button>
-        </form>
+            Coach Prep Brief
+          </Link>
+          <form action={recomputeScoreAction.bind(null, client.id)}>
+            <button
+              type="submit"
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Recompute Score
+            </button>
+          </form>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

@@ -3,40 +3,42 @@ import { prisma } from "@/lib/prisma";
 import { formatPeriodLabel, periodKey } from "@/lib/scoring";
 import { periodKeyFor } from "@/lib/periods";
 import { recomputeGauntletForPeriod } from "@/lib/gauntlet-service";
+import { ensureReferralLinksForEligibleClients } from "@/lib/referral-service";
+import { ACTIVITY_TYPE_LABELS } from "@/lib/activity";
 import { TierBadge } from "@/components/Badge";
 
 export const dynamic = "force-dynamic";
 
-const ACTIVITY_TYPE_LABELS: Record<string, string> = {
-  CALL: "Coaching Call",
-  PROSPECTING: "Prospecting",
-  CLOSE: "Close",
-  REFERRAL_SENT: "Referral Sent",
-  FOLLOW_UP: "Follow-up",
-  CHECK_IN: "Check-in",
-  PLANNING: "Planning",
-  TRAINING: "Training",
-};
-
 export default async function DashboardPage() {
   const currentPeriod = periodKey(new Date());
   const gauntletPeriod = periodKeyFor(new Date(), "monthly");
-  await recomputeGauntletForPeriod(gauntletPeriod, "monthly");
-
-  const [clients, scores, recentActivities, adReadyWinCount, gauntletLeader] = await Promise.all([
-    prisma.client.count({ where: { status: "ACTIVE" } }),
-    prisma.score.findMany({ where: { period: currentPeriod } }),
-    prisma.activity.findMany({
-      orderBy: { occurredAt: "desc" },
-      take: 8,
-      include: { client: true },
-    }),
-    prisma.win.count({ where: { isAdReady: true } }),
-    prisma.gauntletEntry.findFirst({
-      where: { period: gauntletPeriod, tierRank: 1 },
-      include: { client: true },
-    }),
+  await Promise.all([
+    recomputeGauntletForPeriod(gauntletPeriod, "monthly"),
+    ensureReferralLinksForEligibleClients(currentPeriod),
   ]);
+
+  const [clients, scores, recentActivities, adReadyWinCount, gauntletLeader, referralLinks, coaches] =
+    await Promise.all([
+      prisma.client.count({ where: { status: "ACTIVE" } }),
+      prisma.score.findMany({ where: { period: currentPeriod } }),
+      prisma.activity.findMany({
+        orderBy: { occurredAt: "desc" },
+        take: 8,
+        include: { client: true },
+      }),
+      prisma.win.count({ where: { isAdReady: true } }),
+      prisma.gauntletEntry.findFirst({
+        where: { period: gauntletPeriod, tierRank: 1 },
+        include: { client: true },
+      }),
+      prisma.referralLink.findMany(),
+      prisma.coach.findMany({
+        include: { clients: { where: { status: "ACTIVE" } } },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+
+  const totalConversions = referralLinks.reduce((sum, l) => sum + l.conversions, 0);
 
   const avgScore = scores.length
     ? Math.round(scores.reduce((sum, s) => sum + s.producerScore, 0) / scores.length)
@@ -57,7 +59,7 @@ export default async function DashboardPage() {
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Ledger Dashboard</h1>
       <p className="text-sm text-slate-500 mb-8">{formatPeriodLabel(currentPeriod)}</p>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-8">
         <StatCard label="Active Elite Clients" value={clients} />
         <StatCard label="Avg Producer Score" value={avgScore} />
         <StatCard label="Ad-Ready Wins" value={adReadyWinCount} />
@@ -68,9 +70,14 @@ export default async function DashboardPage() {
           </p>
           {gauntletLeader && <p className="text-xs text-slate-400 mt-1">{gauntletLeader.points} pts this month</p>}
         </Link>
+        <Link href="/referrals" className="rounded-lg border border-slate-200 bg-white p-6 hover:border-slate-300">
+          <p className="text-sm text-slate-500">Referral Conversions</p>
+          <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">{totalConversions}</p>
+          <p className="text-xs text-slate-400 mt-1">{referralLinks.length} active link(s)</p>
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="rounded-lg border border-slate-200 bg-white p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
@@ -120,6 +127,27 @@ export default async function DashboardPage() {
               ))}
             </ul>
           )}
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Coaches</h2>
+            <Link href="/coaches" className="text-sm text-slate-500 hover:text-slate-900">
+              View all →
+            </Link>
+          </div>
+          <ul className="space-y-3">
+            {coaches.map((coach) => (
+              <li key={coach.id} className="flex items-center justify-between text-sm">
+                <Link href={`/coaches/${coach.id}`} className="font-medium text-slate-800 hover:underline">
+                  {coach.name}
+                </Link>
+                <span className="text-slate-500">
+                  {coach.clients.length}/{coach.clientCapacity}
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       </div>
     </div>

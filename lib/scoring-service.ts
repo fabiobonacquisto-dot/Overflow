@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { computeProducerScore, periodBounds, periodKey, type ProducerScoreResult } from "@/lib/scoring";
+import { ensureReferralLinkIfEligible } from "@/lib/referral-service";
 
 export async function recomputeScoreForPeriod(clientId: string, period: string) {
   const { start, end } = periodBounds(period);
@@ -12,7 +13,7 @@ export async function recomputeScoreForPeriod(clientId: string, period: string) 
 
   const result = computeProducerScore(activities);
 
-  return prisma.score.upsert({
+  const score = await prisma.score.upsert({
     where: { clientId_period: { clientId, period } },
     create: {
       clientId,
@@ -26,6 +27,11 @@ export async function recomputeScoreForPeriod(clientId: string, period: string) 
       computedAt: new Date(),
     },
   });
+
+  // Referral Flywheel: auto-generate a link the moment a client crosses the eligibility score.
+  await ensureReferralLinkIfEligible(clientId, result.producerScore);
+
+  return score;
 }
 
 export async function recomputeCurrentScore(clientId: string) {

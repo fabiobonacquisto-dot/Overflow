@@ -1,6 +1,6 @@
-# Overflow — Ledger Core + The Gauntlet
+# Overflow — Ledger Core + Modules 1-3
 
-SWC's Elite Coaching Growth Platform. The **Ledger Core** (Phase 1) is the single source of truth every module reads from and writes back to. **The Gauntlet** (Phase 2, Module 1) is the first module built on top of it: a trip-based competition scored from the same Activity data.
+SWC's Elite Coaching Growth Platform. The **Ledger Core** (Phase 1) is the single source of truth every module reads from and writes back to. Three modules are built on top of it so far.
 
 Ships so far:
 
@@ -8,7 +8,9 @@ Ships so far:
 - Manual activity logging (calls, prospecting, closes, referrals, etc.)
 - Win logging, with an ad-ready flag for the future Proof Engine
 - A rule-based Producer Score engine (Time Management / Prospecting / Closing / Accountability), computed per client per month
-- **The Gauntlet**: a live leaderboard by weekly/monthly/quarterly period, a tiered rewards config (Bronze/Silver/Gold/Trip Winner — not winner-take-all), and a `tripEarned` flag once a client crosses the trip threshold
+- **Module 1 — The Gauntlet**: a live leaderboard by weekly/monthly/quarterly period, a tiered rewards config (Bronze/Silver/Gold/Trip Winner — not winner-take-all), and a `tripEarned` flag once a client crosses the trip threshold
+- **Module 2 — Referral Flywheel**: an auto-generated referral link once a client's Producer Score crosses a threshold, real click tracking via a public redirect route, and conversions that credit bonus points back into the Gauntlet
+- **Module 3 — Coach Prep Briefs**: a one-page, rule-based (no AI/LLM) brief per client — score trend, focus areas, recent activity, wins, Gauntlet/Referral standing — surfaced from each coach's roster
 - 9 mock Elite/Founder's Circle clients with realistic seed data so the app is demoable immediately
 
 No HubSpot integration yet — that's Phase 5, behind a `MOCK_HUBSPOT` flag, once a Private App token and custom contact properties are confirmed.
@@ -65,6 +67,17 @@ Points are a different formula from Producer Score on purpose: `lib/gauntlet.ts`
 
 `REWARD_TIERS` in `lib/gauntlet.ts` defines the tiered rewards (Bronze/Silver/Gold/Trip Winner) — thresholds are placeholders calibrated against seeded mock volume, pending the real leadership decision on the first trip threshold/reward (Master Brief Part 9). `tripEarned` is set once a client's points cross the top tier's threshold.
 
+## Referral Flywheel
+
+`/referrals` — every client whose current-period Producer Score crosses `REFERRAL_ELIGIBILITY_SCORE_THRESHOLD` (`lib/referral.ts`, placeholder pending calibration like everything else in this list) automatically gets a unique `/r/<slug>` link the moment `lib/scoring-service.ts` recomputes their score. Visiting `/referrals` also backfills links for anyone who crossed the threshold before this module existed.
+
+- `/r/[slug]` is a real route (`app/r/[slug]/route.ts`) — visiting it increments `clicks` and redirects home. No mock click counter.
+- There's no signup funnel yet (that's HubSpot, Phase 5), so `/referrals` has a "Simulate Conversion" button standing in for a real one. A conversion increments `conversions`, sets `rewardCredited`, and — per the brief's "credit rewards back into Gauntlet points" — creates a real `Activity` row sized so it adds exactly `REFERRAL_CONVERSION_BONUS_POINTS` to that client's Gauntlet total (`lib/referral-service.ts`). It flows through Activity rather than writing `GauntletEntry.points` directly because the Gauntlet leaderboard recomputes points from Activity on every view — a direct write would just get overwritten on the next page load.
+
+## Coach Prep Briefs
+
+`/clients/[id]/brief` — a one-page brief for a coach to read before a call, reachable from a client's page or from `/coaches/[id]`'s roster. `lib/coach-prep.ts` builds it: pure functions, string templates, and arithmetic over data already fetched from the Ledger (score trend, activity counts, wins, Gauntlet rank, referral stats). **No network call, database call, or LLM/AI call happens inside that file** — see the header comment there — matching the brief's explicit "no AI/LLM calls anywhere in v1." The page is marked not-client-facing and print-friendly (`print:` Tailwind variants hide the nav so "Print / Save as PDF" gives a clean one-pager).
+
 ## Useful scripts
 
 ```bash
@@ -86,7 +99,7 @@ prisma generate && prisma migrate deploy && tsx prisma/seed.ts && next build
 - The seed step is **safe to run on every build**: it checks for existing clients first and only loads mock data if the Ledger is empty. Your first deploy seeds the 9 mock clients; every deploy after that (once you've added real clients) leaves the data alone.
 - To force a full reset back to mock data at any time, run `SEED_FORCE=true npm run build` (or just `npm run db:seed`, which sets that flag for you) against the target database.
 - `vercel.json` pins this same command as the project's Build Command, so it's used even if a different one is set in the dashboard.
-- Every page that queries the database (`/`, `/clients`, `/clients/[id]`, `/clients/new`) is marked `export const dynamic = "force-dynamic"`, so Next.js never tries to query the database while statically generating pages at build time — only real requests do, after migrate+seed have already run.
+- Every page that queries the database is marked `export const dynamic = "force-dynamic"`, so Next.js never tries to query the database while statically generating pages at build time — only real requests do, after migrate+seed have already run.
 
 If a build still fails with a "relation/table does not exist" error: open Vercel → Project Settings → Build & Development Settings and check whether **Build Command** has a manual override saved (some imports pre-fill and lock this to plain `next build`). Either clear the override or set it explicitly to the command above, then confirm `DATABASE_URL` is set for the environment (Production/Preview) that build is running under.
 
